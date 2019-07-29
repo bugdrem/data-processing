@@ -1,25 +1,26 @@
- public static class Validate
+public static class Validate
     {
+        //Determine if the parameter is legal
         private static readonly List<string> _lstr = new List<string>();
 
         public static T ModelTrim<T>(this T t) where T : class
         {
+            _lstr.Clear();
             return ValidateMode(t);
         }
         public static T ModelTrim<T>(this T t, object ValidateList) where T : class
         {
+            _lstr.Clear();
             if (ValidateList != null)
             {
-                PropertyInfo[] properties1 = ValidateList.GetType().GetProperties();
-                foreach (var item in properties1)
+                PropertyInfo[] properties = ValidateList.GetType().GetProperties();
+                foreach (var item in properties)
                 {
                     _lstr.Add(item.Name);
                 }
             }
-
             return ValidateMode(t);
         }
-       
 
         private static T ValidateMode<T>(this T t)
         {
@@ -30,110 +31,118 @@
                     return default;
                 }
                 Type type = t.GetType();
-                if (type.Name.StartsWith("String"))
-                {
-                    //TODO 如何赋值
-                    //var a = t.GetType();
-                    //var b = a.GetProperty("String");
-                    //b.SetValue(t.ToString().Trim(), null);
-                }
-                PropertyInfo[] properties = t.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public);
-                if (properties.Length <= 0)
-                {
-                    return default;
-                }
 
-                for (int i = 0; i < properties.Length; i++)
+                if (type.Name == "String")
                 {
-                    var modelType = properties[i].PropertyType;
-                    if (modelType.Name.StartsWith("String"))
+                    var str = t.ToString().Trim();
+                    if (string.IsNullOrEmpty(str))
                     {
-                        string value = properties[i].GetValue(t, null)?.ToString();
-                        if (value == null)
-                        {
-                            //continue;
-                            if (_lstr.Any(item => item == properties[i].Name))
-                            {
-                                //如果标记的值为空则不予通过
-                                return default;
-                            }
-                        }
-                        else
-                        {
-                            if (value != value.Trim())
-                            {
-                                properties[i].SetValue(t, value.Trim());
-                            }
-                        }
+                        return default;
                     }
-                    else if (modelType.Name.StartsWith("List"))
+                    return (T)(object)str;
+                }
+                else if (type.Name.Contains("List"))    //TODO Unrealized LinkedList String[]
+                {
+                    var gt = t.GetType();
+                    if (gt.GenericTypeArguments.Count() == 1)
                     {
-                        //TODO Continue recursion
-                        var aa = properties[i].GetValue(t, null);
-                        var bb = aa.GetType();
-
-                        if (bb.GenericTypeArguments.Any())
+                        var gta = gt.GenericTypeArguments[0];
+                        if (gta.Name == "String")
                         {
-                            if (bb.GenericTypeArguments.Count() == 1)
+                            dynamic dd = t;
+                            var index = 0;
+                            foreach (var item in dd.ToArray())
                             {
-                                var cc = bb.GenericTypeArguments[0].Name;
-                                if (cc.StartsWith("String"))
+                                if (item != null)
                                 {
-                                    dynamic dd = aa;
-                                    var ee = dd.ToArray();
-                                    var iii = 0;
-                                    foreach (var item in ee)
+                                    if (item != item.Trim())
                                     {
-                                        dd[iii] = item.Trim();
-                                        iii++;
+                                        string newItem = item.Trim();
+                                        if (string.IsNullOrEmpty(newItem))
+                                        {
+                                            dd[index] = null;
+                                        }
+                                        else
+                                        {
+                                            dd[index] = newItem;
+                                        }
                                     }
-                                }
-                                else if (cc.StartsWith("Int") || cc.StartsWith("Double") || cc.StartsWith("Boolean"))
-                                {
-
-                                }
-                                else
-                                {
-                                    dynamic ff = aa;
-                                    foreach (var item in ff)
-                                    {
-                                        ValidateMode(item);
-                                    }
+                                    index++;
                                 }
                             }
-                            else
-                            {
-                                aa.ValidateMode();
-                            }
+                        }
+                        else if (gta.IsValueType)
+                        {
+                            // Int* Double Boolean ...
                         }
                         else
                         {
-                            aa.ValidateMode();
-                        }
-                    }
-                    else if (modelType.IsValueType)
-                    {
-                        if (modelType.Name.StartsWith("Int") || modelType.Name.StartsWith("Double"))
-                        {
-
-                        }
-                        else if (modelType.Name.StartsWith("Boolean"))
-                        {
-
-                        }
-                        else
-                        {
-
+                            dynamic dc = t;
+                            foreach (var item in dc)
+                            {
+                                ValidateMode(item);
+                            }
                         }
                     }
                     else
                     {
-                        properties[i].GetValue(t).ValidateMode();
+                        dynamic tt = t;
+                        foreach (var item in tt)
+                        {
+                            ValidateMode(item);
+                        }
                     }
+                    return t;
                 }
+                else
+                {
+                    PropertyInfo[] properties = t.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public);
+                    if (properties.Length <= 0)
+                    {
+                        return default;
+                    }
 
-                return t;
-                //return t;
+                    for (int i = 0; i < properties.Length; i++)
+                    {
+                        var modelType = properties[i].PropertyType;
+                        if (modelType.Name == "String")
+                        {
+                            string value = properties[i].GetValue(t, null)?.ToString();
+                            if (value == null)
+                            {
+                                //continue;
+                                if (_lstr.Any(item => item == properties[i].Name))
+                                {
+                                    return default;
+                                }
+                            }
+                            else
+                            {
+                                if (value != value.Trim())
+                                {
+                                    string newValue = value.Trim();
+                                    if (string.IsNullOrEmpty(newValue))
+                                    {
+                                        properties[i].SetValue(t, null);
+                                    }
+                                    else
+                                    {
+                                        properties[i].SetValue(t, newValue);
+                                    }
+                                }
+                            }
+                        }
+                        else if (modelType.IsValueType)
+                        {
+                            // Int* Double Boolean ...
+                        }
+                        else
+                        {
+                            properties[i].GetValue(t).ValidateMode();
+                        }
+                    }
+                    return t;
+                }
             }
             catch (Exception)
             {
